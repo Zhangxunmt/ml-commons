@@ -266,7 +266,7 @@ public class DetachedConnector extends AbstractConnector {
     @Override
     public String getPredictEndpoint() {
         Map<String, String> predictSchema = fromJson(predictAPI);
-        return predictSchema.get(URL_FIELD);
+        return parseURL(predictSchema.get(URL_FIELD));
     }
 
     @Override
