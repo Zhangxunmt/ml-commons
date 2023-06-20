@@ -23,29 +23,51 @@ import static org.opensearch.common.xcontent.XContentParserUtils.ensureExpectedT
 
 @Data
 public class MLCreateConnectorInput implements ToXContentObject, Writeable {
-    public static final String CONNECTOR_META_DATA_FIELD = "metadata";
+    public static final String CONNECTOR_NAME_FIELD = "name";
+    public static final String CONNECTOR_DESCRIPTION_FIELD = "description";
+    public static final String CONNECTOR_VERSION_FIELD = "version";
+    public static final String CONNECTOR_PROTOCOL_FIELD = "protocol";
+
     public static final String CONNECTOR_PARAMETERS_FIELD = "parameters";
     public static final String CONNECTOR_CREDENTIAL_FIELD = "credential";
-    public static final String CONNECTOR_TEMPLATE_FIELD = "template";
+    public static final String CONNECTOR_ACTIONS_FIELD = "actions";
 
-    private Map<String, String> metadata;
+    public static final String BACKEND_ROLES_FIELD = "backend_roles";
+    public static final String ADD_ALL_BACKEND_ROLES_FIELD = "add_all_backend_roles";
+    public static final String OWNER_FIELD = "owner";
+    public static final String ACCESS_MODE_FIELD = "access_mode";
+
+    private String name;
+    private String description;
+    private String version;
+    private String protocol;
     private Map<String, String> parameters;
     private Map<String, String> credential;
     private ConnectorTemplate connectorTemplate;
 
     @Builder(toBuilder = true)
-    public MLCreateConnectorInput(Map<String, String> metadata,
+    public MLCreateConnectorInput(String name,
+                                  String description,
+                                  String version,
+                                  String protocol,
                                   Map<String, String> parameters,
                                   Map<String, String> credential,
-                                  ConnectorTemplate connectorTemplate) {
-        this.metadata = metadata;
+                                  ConnectorTemplate connectorTemplate
+                                  ) {
+        this.name = name;
+        this.description = description;
+        this.version = version;
+        this.protocol = protocol;
         this.parameters = parameters;
         this.credential = credential;
         this.connectorTemplate = connectorTemplate;
     }
 
     public static MLCreateConnectorInput parse(XContentParser parser) throws IOException {
-        Map<String, String> metadata = new HashMap<>();
+        String name = null;
+        String description = null;
+        String version = null;
+        String protocol = null;
         Map<String, String> parameters = new HashMap<>();
         Map<String, String> credential = new HashMap<>();
         ConnectorTemplate connectorTemplate = null;
@@ -56,8 +78,17 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             parser.nextToken();
 
             switch (fieldName) {
-                case CONNECTOR_META_DATA_FIELD:
-                    metadata = parser.mapStrings();
+                case CONNECTOR_NAME_FIELD:
+                    name = parser.text();
+                    break;
+                case CONNECTOR_DESCRIPTION_FIELD:
+                    description = parser.text();
+                    break;
+                case CONNECTOR_VERSION_FIELD:
+                    version = parser.text();
+                    break;
+                case CONNECTOR_PROTOCOL_FIELD:
+                    protocol = parser.text();
                     break;
                 case CONNECTOR_PARAMETERS_FIELD:
                     parameters = parser.mapStrings();
@@ -65,7 +96,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                 case CONNECTOR_CREDENTIAL_FIELD:
                     credential = parser.mapStrings();
                     break;
-                case CONNECTOR_TEMPLATE_FIELD:
+                case CONNECTOR_ACTIONS_FIELD:
                     connectorTemplate = connectorTemplate.parse(parser);
                     break;
                 default:
@@ -73,15 +104,23 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
                     break;
             }
         }
-
-        return new MLCreateConnectorInput(metadata, parameters, credential, connectorTemplate);
+        return new MLCreateConnectorInput(name, description, version, protocol, parameters, credential, connectorTemplate);
     }
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject();
-        if (metadata != null) {
-            builder.field(CONNECTOR_META_DATA_FIELD, metadata);
+        if (name != null) {
+            builder.field(CONNECTOR_NAME_FIELD, name);
+        }
+        if (description != null) {
+            builder.field(CONNECTOR_DESCRIPTION_FIELD, description);
+        }
+        if (version != null) {
+            builder.field(CONNECTOR_VERSION_FIELD, version);
+        }
+        if (protocol != null) {
+            builder.field(CONNECTOR_PROTOCOL_FIELD, protocol);
         }
         if (parameters != null) {
             builder.field(CONNECTOR_PARAMETERS_FIELD, parameters);
@@ -90,7 +129,7 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
             builder.field(CONNECTOR_CREDENTIAL_FIELD, credential);
         }
         if (connectorTemplate != null) {
-            builder.field(CONNECTOR_TEMPLATE_FIELD, connectorTemplate);
+            builder.field(CONNECTOR_ACTIONS_FIELD, connectorTemplate);
         }
         builder.endObject();
         return builder;
@@ -98,13 +137,10 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
 
     @Override
     public void writeTo(StreamOutput output) throws IOException {
-        if (metadata != null) {
-            output.writeBoolean(true);
-            output.writeMap(metadata, StreamOutput::writeString, StreamOutput::writeString);
-        }
-        else {
-            output.writeBoolean(false);
-        }
+        output.writeString(name);
+        output.writeString(description);
+        output.writeString(version);
+        output.writeString(protocol);
         if (parameters != null) {
             output.writeBoolean(true);
             output.writeMap(parameters, StreamOutput::writeString, StreamOutput::writeString);
@@ -126,9 +162,10 @@ public class MLCreateConnectorInput implements ToXContentObject, Writeable {
     }
 
     public MLCreateConnectorInput(StreamInput input) throws IOException {
-        if (input.readBoolean()) {
-            metadata = input.readMap(s -> s.readString(), s-> s.readString());
-        }
+        name = input.readString();
+        description = input.readString();
+        version = input.readString();
+        protocol = input.readString();
         if (input.readBoolean()) {
             parameters = input.readMap(s -> s.readString(), s -> s.readString());
         }
