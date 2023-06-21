@@ -27,6 +27,7 @@ import org.opensearch.common.util.concurrent.ThreadContext;
 import org.opensearch.common.xcontent.XContentType;
 import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
+import org.opensearch.ml.common.connector.template.APISchema;
 import org.opensearch.ml.common.connector.template.ConnectorState;
 import org.opensearch.ml.common.connector.template.DetachedConnector;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
@@ -86,8 +87,8 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
                 .protocol(mlCreateConnectorInput.getMetadata().get(CONNECTOR_PROTOCOL_FIELD))
                 .parameterStr(toJson(mlCreateConnectorInput.getParameters()))
                 .credentialStr(toJson(mlCreateConnectorInput.getCredential()))
-                .predictAPI(mlCreateConnectorInput.getConnectorTemplate().getPredictSchema().toString())
-                .metadataAPI(mlCreateConnectorInput.getConnectorTemplate().getMetadataSchema().toString())
+                .predictAPI(getAPIStringValue(mlCreateConnectorInput.getConnectorTemplate().getPredictSchema()))
+                .metadataAPI(getAPIStringValue(mlCreateConnectorInput.getConnectorTemplate().getMetadataSchema()))
                 .connectorState(ConnectorState.CREATED)
                 .createdTime(now)
                 .lastUpdateTime(now)
@@ -129,5 +130,12 @@ public class TransportCreateConnectorAction extends HandledTransportAction<Actio
             log.error("Failed to create connector " + connectorName, e);
             listener.onFailure(e);
         }
+    }
+
+    private String getAPIStringValue(APISchema apiSchema) {
+        if (apiSchema == null) {
+            return null;
+        }
+        return apiSchema.toString();
     }
 }
