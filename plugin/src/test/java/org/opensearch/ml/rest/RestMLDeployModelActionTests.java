@@ -8,6 +8,8 @@ package org.opensearch.ml.rest;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
+import static org.opensearch.ml.common.CommonValue.ML_CONNECTOR_INDEX;
+import static org.opensearch.ml.common.utils.StringUtils.gson;
 
 import java.util.*;
 
@@ -16,6 +18,7 @@ import org.junit.Ignore;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.opensearch.action.ActionListener;
+import org.opensearch.action.update.UpdateRequest;
 import org.opensearch.client.node.NodeClient;
 import org.opensearch.common.bytes.BytesArray;
 import org.opensearch.common.settings.Settings;
@@ -34,6 +37,7 @@ import org.opensearch.threadpool.TestThreadPool;
 import org.opensearch.threadpool.ThreadPool;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonParser;
 
 public class RestMLDeployModelActionTests extends OpenSearchTestCase {
 
@@ -129,6 +133,14 @@ public class RestMLDeployModelActionTests extends OpenSearchTestCase {
             .withParams(params)
             .withContent(new BytesArray(requestContent), XContentType.JSON)
             .build();
+        UpdateRequest updateRequest = new UpdateRequest(ML_CONNECTOR_INDEX, "12222");
+        updateRequest.doc(model);
+
+        UpdateRequest updateRequest1 = new UpdateRequest(ML_CONNECTOR_INDEX, "12222");
+        updateRequest.doc(gson.fromJson(JsonParser.parseString(requestContent), Map.class));
+
+        System.out.println(updateRequest);
+        System.out.println(updateRequest1);
         return request;
     }
 }

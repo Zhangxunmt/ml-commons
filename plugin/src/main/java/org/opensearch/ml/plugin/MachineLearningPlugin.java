@@ -38,6 +38,7 @@ import org.opensearch.ml.action.connector.DeleteConnectorTransportAction;
 import org.opensearch.ml.action.connector.GetConnectorTransportAction;
 import org.opensearch.ml.action.connector.SearchConnectorTransportAction;
 import org.opensearch.ml.action.connector.TransportCreateConnectorAction;
+import org.opensearch.ml.action.connector.UpdateConnectorTransportAction;
 import org.opensearch.ml.action.deploy.TransportDeployModelAction;
 import org.opensearch.ml.action.deploy.TransportDeployModelOnNodeAction;
 import org.opensearch.ml.action.execute.TransportExecuteTaskAction;
@@ -89,6 +90,7 @@ import org.opensearch.ml.common.transport.connector.MLConnectorDeleteAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorGetAction;
 import org.opensearch.ml.common.transport.connector.MLConnectorSearchAction;
 import org.opensearch.ml.common.transport.connector.MLCreateConnectorAction;
+import org.opensearch.ml.common.transport.connector.MLUpdateConnectorAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelAction;
 import org.opensearch.ml.common.transport.deploy.MLDeployModelOnNodeAction;
 import org.opensearch.ml.common.transport.execute.MLExecuteTaskAction;
@@ -149,6 +151,7 @@ import org.opensearch.ml.rest.RestMLStatsAction;
 import org.opensearch.ml.rest.RestMLTrainAndPredictAction;
 import org.opensearch.ml.rest.RestMLTrainingAction;
 import org.opensearch.ml.rest.RestMLUndeployModelAction;
+import org.opensearch.ml.rest.RestMLUpdateConnectorAction;
 import org.opensearch.ml.rest.RestMLUpdateModelGroupAction;
 import org.opensearch.ml.rest.RestMLUploadModelChunkAction;
 import org.opensearch.ml.settings.MLCommonsSettings;
@@ -256,7 +259,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 new ActionHandler<>(MLCreateConnectorAction.INSTANCE, TransportCreateConnectorAction.class),
                 new ActionHandler<>(MLConnectorGetAction.INSTANCE, GetConnectorTransportAction.class),
                 new ActionHandler<>(MLConnectorDeleteAction.INSTANCE, DeleteConnectorTransportAction.class),
-                new ActionHandler<>(MLConnectorSearchAction.INSTANCE, SearchConnectorTransportAction.class)
+                new ActionHandler<>(MLConnectorSearchAction.INSTANCE, SearchConnectorTransportAction.class),
+                new ActionHandler<>(MLUpdateConnectorAction.INSTANCE, UpdateConnectorTransportAction.class)
             );
     }
 
@@ -493,6 +497,7 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
         RestMLGetConnectorAction restMLGetConnectorAction = new RestMLGetConnectorAction();
         RestMLDeleteConnectorAction restMLDeleteConnectorAction = new RestMLDeleteConnectorAction();
         RestMLSearchConnectorAction restMLSearchConnectorAction = new RestMLSearchConnectorAction();
+        RestMLUpdateConnectorAction restMLUpdateConnectorAction = new RestMLUpdateConnectorAction(mlFeatureEnabledSetting);
         return ImmutableList
             .of(
                 restMLStatsAction,
@@ -519,7 +524,8 @@ public class MachineLearningPlugin extends Plugin implements ActionPlugin {
                 restMLCreateConnectorAction,
                 restMLGetConnectorAction,
                 restMLDeleteConnectorAction,
-                restMLSearchConnectorAction
+                restMLSearchConnectorAction,
+                restMLUpdateConnectorAction
             );
     }
 
