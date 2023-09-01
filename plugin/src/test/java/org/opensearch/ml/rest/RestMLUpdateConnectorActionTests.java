@@ -25,13 +25,13 @@ import org.junit.rules.ExpectedException;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.opensearch.action.ActionListener;
 import org.opensearch.action.update.UpdateResponse;
 import org.opensearch.client.node.NodeClient;
+import org.opensearch.common.bytes.BytesArray;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.xcontent.XContentType;
-import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.Strings;
-import org.opensearch.core.common.bytes.BytesArray;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorAction;
 import org.opensearch.ml.common.transport.connector.MLUpdateConnectorRequest;
@@ -98,7 +98,7 @@ public class RestMLUpdateConnectorActionTests extends OpenSearchTestCase {
         assertNotNull(routes);
         assertFalse(routes.isEmpty());
         RestHandler.Route route = routes.get(0);
-        assertEquals(RestRequest.Method.PUT, route.getMethod());
+        assertEquals(RestRequest.Method.POST, route.getMethod());
         assertEquals("/_plugins/_ml/connectors/_update/{connector_id}", route.getPath());
     }
 
