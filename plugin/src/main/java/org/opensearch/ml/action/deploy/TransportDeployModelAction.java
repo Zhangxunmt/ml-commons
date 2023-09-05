@@ -68,6 +68,8 @@ import com.google.common.collect.ImmutableMap;
 
 import lombok.extern.log4j.Log4j2;
 
+import javax.swing.*;
+
 @Log4j2
 public class TransportDeployModelAction extends HandledTransportAction<ActionRequest, MLDeployModelResponse> {
     TransportService transportService;
@@ -213,9 +215,14 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
                         mlTaskManager.createMLTask(mlTask, ActionListener.wrap(response -> {
                             String taskId = response.getId();
                             mlTask.setTaskId(taskId);
+                            if (algorithm == FunctionName.REMOTE) {
+                                mlTaskManager.add(mlTask, nodeIds);
+                                deployRemoteModel(mlModel, mlTask, localNodeId, eligibleNodes, deployToAllNodes, listener);
+                                return;
+                            }
                             try {
                                 mlTaskManager.add(mlTask, nodeIds);
-                                listener.onResponse(new MLDeployModelResponse(taskId, MLTaskState.CREATED.name()));
+                                listener.onResponse(new MLDeployModelResponse(taskId, MLTaskType.DEPLOY_MODEL, MLTaskState.CREATED.name()));
                                 threadPool
                                     .executor(DEPLOY_THREAD_POOL)
                                     .execute(
@@ -259,6 +266,79 @@ public class TransportDeployModelAction extends HandledTransportAction<ActionReq
         }
 
     }
+
+    @VisibleForTesting
+    void deployRemoteModel(
+        MLModel mlModel,
+        MLTask mlTask,
+        String localNodeId,
+        List<DiscoveryNode> eligibleNodes,
+        boolean deployToAllNodes,
+        ActionListener<MLDeployModelResponse> listener
+    ) {
+        MLDeployModelInput deployModelInput = new MLDeployModelInput(
+                mlModel.getModelId(),
+                mlTask.getTaskId(),
+                mlModel.getModelContentHash(),
+                eligibleNodes.size(),
+                localNodeId,
+                deployToAllNodes,
+                mlTask
+        );
+
+        MLDeployModelNodesRequest deployModelRequest = new MLDeployModelNodesRequest(
+            eligibleNodes.toArray(new DiscoveryNode[0]),
+            deployModelInput
+        );
+
+        ActionListener<MLDeployModelNodesResponse> actionListener = deployModelNodesResponseListener(mlTask.getTaskId(), mlModel.getModelId(), listener);
+        List<String> workerNodes = eligibleNodes.stream().map(n -> n.getId()).collect(Collectors.toList());
+        mlModelManager
+                .updateModel(
+                        mlModel.getModelId(),
+                        ImmutableMap
+                                .of(
+                                        MLModel.MODEL_STATE_FIELD,
+                                        MLModelState.DEPLOYING,
+                                        MLModel.PLANNING_WORKER_NODE_COUNT_FIELD,
+                                        eligibleNodes.size(),
+                                        MLModel.PLANNING_WORKER_NODES_FIELD,
+                                        workerNodes,
+                                        MLModel.DEPLOY_TO_ALL_NODES_FIELD,
+                                        deployToAllNodes
+                                ),
+                        ActionListener
+                                .wrap(
+                                        r -> client.execute(MLDeployModelOnNodeAction.INSTANCE, deployModelRequest, actionListener),
+                                        actionListener::onFailure
+                                )
+                );
+    }
+
+    private ActionListener<MLDeployModelNodesResponse> deployModelNodesResponseListener(
+        String taskId,
+        String modelId,
+        ActionListener<MLDeployModelResponse> listener
+    ) {
+        return ActionListener.wrap(r -> {
+            if (mlTaskManager.contains(taskId)) {
+                mlTaskManager.updateMLTask(taskId, ImmutableMap.of(STATE_FIELD, MLTaskState.RUNNING), TASK_SEMAPHORE_TIMEOUT, false);
+            }
+            listener.onResponse(new MLDeployModelResponse(taskId, MLTaskType.DEPLOY_MODEL, MLTaskState.COMPLETED.name()));
+        }, e -> {
+            log.error("Failed to deploy model " + modelId, e);
+            mlTaskManager
+                    .updateMLTask(
+                            taskId,
+                            ImmutableMap.of(MLTask.ERROR_FIELD, MLExceptionUtils.getRootCauseMessage(e), STATE_FIELD, FAILED),
+                            TASK_SEMAPHORE_TIMEOUT,
+                            true
+                    );
+            mlModelManager.updateModel(modelId, ImmutableMap.of(MLModel.MODEL_STATE_FIELD, MLModelState.DEPLOY_FAILED));
+            listener.onFailure(e);
+        });
+    }
+
 
     @VisibleForTesting
     void updateModelDeployStatusAndTriggerOnNodesAction(

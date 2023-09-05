@@ -268,8 +268,10 @@ public class MLTaskManager {
     public void updateMLTask(String taskId, Map<String, Object> updatedFields, long timeoutInMillis, boolean removeFromCache) {
         ActionListener<UpdateResponse> internalListener = ActionListener.wrap(response -> {
             if (response.status() == RestStatus.OK) {
+                log.info("Updated ML task successfully: {}, taskId: {}, updatedFields: {}", response.status(), taskId, updatedFields);
                 log.debug("Updated ML task successfully: {}, taskId: {}, updatedFields: {}", response.status(), taskId, updatedFields);
             } else {
+                log.info("Failed to update ML task {}, status: {}, updatedFields: {}", taskId, response.status(), updatedFields);
                 log.error("Failed to update ML task {}, status: {}, updatedFields: {}", taskId, response.status(), updatedFields);
             }
         }, e -> { logException("Failed to update ML task: " + taskId, e, log); });
