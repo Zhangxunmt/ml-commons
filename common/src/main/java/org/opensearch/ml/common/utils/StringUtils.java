@@ -261,4 +261,11 @@ public class StringUtils {
             return errorMessage + " Model ID: " + modelId;
         }
     }
+
+    public static String obtainFieldNameFromJsonPath(String jsonPath) {
+        String[] parts = jsonPath.split("\\.");
+
+        // Get the last part which is the field name
+        return parts[parts.length - 1];
+    }
 }
