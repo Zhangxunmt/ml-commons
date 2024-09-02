@@ -26,7 +26,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -150,27 +149,6 @@ public class StringUtils {
     }
 
     @SuppressWarnings("removal")
-    public static LinkedHashMap<String, String> getOrderedMap(Map<String, ?> parameterObjs) {
-        LinkedHashMap<String, String> parameters = new LinkedHashMap<>();
-        for (String key : parameterObjs.keySet()) {
-            Object value = parameterObjs.get(key);
-            try {
-                AccessController.doPrivileged((PrivilegedExceptionAction<Void>) () -> {
-                    if (value instanceof String) {
-                        parameters.put(key, (String) value);
-                    } else {
-                        parameters.put(key, gson.toJson(value));
-                    }
-                    return null;
-                });
-            } catch (PrivilegedActionException e) {
-                throw new RuntimeException(e);
-            }
-        }
-        return parameters;
-    }
-
-    @SuppressWarnings("removal")
     public static String toJson(Object value) {
         try {
             return AccessController.doPrivileged((PrivilegedExceptionAction<String>) () -> {
@@ -267,5 +245,13 @@ public class StringUtils {
 
         // Get the last part which is the field name
         return parts[parts.length - 1];
+    }
+
+    public static String getJsonPath(String jsonPathWithSource) {
+        // Find the index of the first occurrence of "$."
+        int startIndex = jsonPathWithSource.indexOf("$.");
+
+        // Extract the substring from the startIndex to the end of the input string
+        return (startIndex != -1) ? jsonPathWithSource.substring(startIndex) : jsonPathWithSource;
     }
 }
