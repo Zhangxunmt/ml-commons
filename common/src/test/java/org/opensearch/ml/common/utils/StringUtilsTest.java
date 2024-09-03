@@ -10,6 +10,7 @@ import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.opensearch.ml.common.utils.StringUtils.getJsonPath;
 import static org.opensearch.ml.common.utils.StringUtils.obtainFieldNameFromJsonPath;
+import static org.opensearch.ml.common.utils.StringUtils.toJson;
 
 import java.util.Arrays;
 import java.util.HashMap;
