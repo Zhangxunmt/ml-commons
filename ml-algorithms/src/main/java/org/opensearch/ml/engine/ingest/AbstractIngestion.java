@@ -8,10 +8,10 @@ package org.opensearch.ml.engine.ingest;
 import static org.opensearch.ml.common.utils.StringUtils.getJsonPath;
 import static org.opensearch.ml.common.utils.StringUtils.obtainFieldNameFromJsonPath;
 
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -96,16 +96,16 @@ public class AbstractIngestion implements Ingestable {
             Object value = entry.getValue();
             if (value instanceof String) {
                 return ((String) value).contains(prefix);
-            } else if (value instanceof String[]) {
-                return Arrays.stream((String[]) value).anyMatch(val -> val.contains(prefix));
+            } else if (value instanceof List) {
+                return ((List<String>) value).stream().anyMatch(val -> val.contains(prefix));
             }
             return false;
         }).collect(Collectors.toMap(Map.Entry::getKey, entry -> {
             Object value = entry.getValue();
             if (value instanceof String) {
                 return value;
-            } else if (value instanceof String[]) {
-                return Arrays.stream((String[]) value).filter(val -> val.contains(prefix)).toArray(String[]::new);
+            } else if (value instanceof List) {
+                return ((List<String>) value).stream().filter(val -> val.contains(prefix)).collect(Collectors.toList());
             }
             return null;
         }));
@@ -136,20 +136,16 @@ public class AbstractIngestion implements Ingestable {
         List<String> outputFieldNames = outputJsonPath != null ? (List<String>) fieldMapping.get(OUTPUT_FIELD_NAMES) : null;
 
         List<String> ingestFieldsJsonPath = Optional
-            .ofNullable((List<String>) fieldMapping.get(INGEST_FIELDS))
-            .stream()
-            .map(StringUtils::getJsonPath)
-            .collect(Collectors.toList());
+                .ofNullable((List<String>) fieldMapping.get(INGEST_FIELDS))
+                .stream()
+                .flatMap(java.util.Collection::stream)
+                .map(StringUtils::getJsonPath)
+                .collect(Collectors.toList());
 
-        if (remoteModelInput.size() != inputFieldNames.size() || remoteModelOutput.size() != outputFieldNames.size()) {
-            throw new IllegalArgumentException("the fieldMapping and source data do not match");
-        }
         Map<String, Object> jsonMap = new HashMap<>();
 
-        for (int index = 0; index < remoteModelInput.size(); index++) {
-            jsonMap.put(inputFieldNames.get(index), remoteModelInput.get(index));
-            jsonMap.put(outputFieldNames.get(index), remoteModelOutput.get(index));
-        }
+        populateJsonMap(jsonMap, inputFieldNames, remoteModelInput);
+        populateJsonMap(jsonMap, outputFieldNames, remoteModelOutput);
 
         for (String fieldPath : ingestFieldsJsonPath) {
             jsonMap.put(obtainFieldNameFromJsonPath(fieldPath), JsonPath.read(jsonStr, fieldPath));
@@ -157,11 +153,11 @@ public class AbstractIngestion implements Ingestable {
 
         if (fieldMapping.containsKey(ID_FIELD)) {
             List<String> docIdJsonPath = Optional
-                .ofNullable((List<String>) fieldMapping.get(ID_FIELD))
-                .stream()
-                .flatMap(Collection::stream)
-                .map(StringUtils::getJsonPath)
-                .collect(Collectors.toList());
+                    .ofNullable((List<String>) fieldMapping.get(ID_FIELD))
+                    .stream()
+                    .flatMap(java.util.Collection::stream)
+                    .map(StringUtils::getJsonPath)
+                    .collect(Collectors.toList());
             if (docIdJsonPath.size() != 1) {
                 throw new IllegalArgumentException("The Id field must contains only 1 jsonPath for each source");
             }
@@ -180,25 +176,39 @@ public class AbstractIngestion implements Ingestable {
         BulkRequest bulkRequest = new BulkRequest();
         sourceLines.stream().forEach(jsonStr -> {
             Map<String, Object> filteredMapping = isSoleSource
-                ? mlBatchIngestionInput.getFieldMapping()
-                : filterFieldMapping(mlBatchIngestionInput, sourceIndex);
+                    ? mlBatchIngestionInput.getFieldMapping()
+                    : filterFieldMapping(mlBatchIngestionInput, sourceIndex);
             Map<String, Object> jsonMap = processFieldMapping(jsonStr, filteredMapping);
             if (isSoleSource || sourceIndex == 0) {
-                IndexRequest indexRequest = new IndexRequest(mlBatchIngestionInput.getIndexName()).source(jsonMap);
+                IndexRequest indexRequest = new IndexRequest(mlBatchIngestionInput.getIndexName());
                 if (jsonMap.containsKey("_id")) {
-                    indexRequest.id((String) jsonMap.get("_id"));
+                    String id = (String) jsonMap.remove("_id");
+                    indexRequest.id(id);
                 }
+                indexRequest.source(jsonMap);
                 bulkRequest.add(indexRequest);
             } else {
                 // bulk update docs as they were partially ingested
                 if (!jsonMap.containsKey("_id")) {
                     throw new IllegalArgumentException("The id filed must be provided to match documents for multiple sources");
                 }
-                String id = (String) jsonMap.get("_id");
+                String id = (String) jsonMap.remove("_id");
                 UpdateRequest updateRequest = new UpdateRequest(mlBatchIngestionInput.getIndexName(), id).doc(jsonMap).upsert(jsonMap);
                 bulkRequest.add(updateRequest);
             }
         });
         client.bulk(bulkRequest, bulkResponseListener);
+    }
+
+    private void populateJsonMap(Map<String, Object> jsonMap, List<String> fieldNames, List<?> modelData) {
+        if (modelData != null) {
+            if (modelData.size() != fieldNames.size()) {
+                throw new IllegalArgumentException("The fieldMapping and source data do not match");
+            }
+
+            for (int index = 0; index < modelData.size(); index++) {
+                jsonMap.put(fieldNames.get(index), modelData.get(index));
+            }
+        }
     }
 }
