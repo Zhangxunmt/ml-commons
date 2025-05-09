@@ -7,23 +7,93 @@ package org.opensearch.ml.engine.httpclient;
 
 import java.net.Inet4Address;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.NetworkInterface;
 import java.net.UnknownHostException;
 import java.security.AccessController;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Enumeration;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+
+import io.netty.bootstrap.Bootstrap;
+import io.netty.channel.Channel;
+import io.netty.channel.ChannelInitializer;
+import io.netty.channel.ChannelOption;
+import io.netty.channel.nio.NioEventLoopGroup;
+import io.netty.channel.socket.nio.NioSocketChannel;
+import io.netty.handler.logging.LogLevel;
+import io.netty.handler.logging.LoggingHandler;
 import lombok.extern.log4j.Log4j2;
 import software.amazon.awssdk.http.async.SdkAsyncHttpClient;
 import software.amazon.awssdk.http.nio.netty.NettyNioAsyncHttpClient;
+import software.amazon.awssdk.http.nio.netty.SdkEventLoopGroup;
 
 @Log4j2
 public class MLHttpClientFactory {
 
     public static SdkAsyncHttpClient getAsyncHttpClient(Duration connectionTimeout, Duration readTimeout, int maxConnections) {
+        try {
+            String localAddress = getLocalAddress();
+            log.info("debug --- local address is: {}", localAddress);
+
+            return AccessController.doPrivileged(
+                    (PrivilegedExceptionAction<SdkAsyncHttpClient>) () -> {
+                        // Create event loop group
+                        NioEventLoopGroup eventLoopGroup = new NioEventLoopGroup(maxConnections);
+
+                        // Create SdkEventLoopGroup with custom channel factory
+                        SdkEventLoopGroup sdkEventLoopGroup = SdkEventLoopGroup.builder()
+                                .channelFactory(() -> {
+                                    try {
+                                        return AccessController.doPrivileged((PrivilegedExceptionAction<NioSocketChannel>) () -> {
+                                            Bootstrap bootstrap = new Bootstrap()
+                                                    .group(eventLoopGroup)
+                                                    .channel(NioSocketChannel.class)
+                                                    .handler(new ChannelInitializer<Channel>() {
+                                                        @Override
+                                                        protected void initChannel(Channel ch) {
+                                                            ch.pipeline().addLast(new LoggingHandler(LogLevel.INFO));
+                                                        }
+                                                    });
+
+                                            if (localAddress != null) {
+                                                bootstrap.option(ChannelOption.SO_REUSEADDR, true);
+                                                bootstrap.localAddress(new InetSocketAddress(InetAddress.getByName(localAddress), 0));
+                                            }
+
+                                            return (NioSocketChannel) bootstrap.register().sync().channel();
+                                        });
+                                    } catch (Exception e) {
+                                        log.error("Error creating channel", e);
+                                        return new NioSocketChannel();
+                                    }
+                                })
+                                .build();
+
+                        // Build the client with the custom event loop group
+                        return NettyNioAsyncHttpClient.builder()
+                                .connectionTimeout(connectionTimeout)
+                                .readTimeout(readTimeout)
+                                .maxConcurrency(maxConnections)
+                                .eventLoopGroup(sdkEventLoopGroup)
+                                // Add any additional socket options if needed
+                                .putChannelOption(ChannelOption.SO_REUSEADDR, true)
+                                .putChannelOption(ChannelOption.SO_KEEPALIVE, true)
+                                .build();
+                    }
+            );
+        } catch (PrivilegedActionException e) {
+            log.error("Failed to create async HTTP client", e);
+            return null;
+        }
+    }
+
+    public static SdkAsyncHttpClient getAsyncHttpClientOld(Duration connectionTimeout, Duration readTimeout, int maxConnections) {
         try {
             return AccessController
                 .doPrivileged(
@@ -112,6 +182,34 @@ public class MLHttpClientFactory {
             return Integer.parseInt(input, 8);
         } catch (NumberFormatException e) {
             return Integer.parseInt(input);
+        }
+    }
+
+    private static String getLocalAddress() {
+        try {
+            String interfaceName = "eth1";
+            NetworkInterface networkInterface = NetworkInterface.getByName(interfaceName);
+            if (networkInterface == null) {
+                log.info("ylwudebug --- eth1 is null");
+                networkInterface = NetworkInterface.getByName("eth0");
+            }
+            if (networkInterface == null) {
+                log.info("ylwudebug --- eth0 is null");
+                return null;
+            }
+            Enumeration<InetAddress> inetAddresses = networkInterface.getInetAddresses();
+            String ip = null;
+            while (inetAddresses.hasMoreElements()) {
+                InetAddress currentAddress = inetAddresses.nextElement();
+                if (currentAddress instanceof Inet4Address && !currentAddress.isLoopbackAddress()) {
+                    ip = currentAddress.getHostAddress();
+                    break;
+                }
+            }
+            return ip;
+        } catch (Exception e) {
+            log.error("Error getting local address", e);
+            return null;
         }
     }
 }
